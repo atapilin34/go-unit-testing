@@ -1,31 +1,53 @@
 package main
 
 import (
-	"net/http"
-	"net/http/httptest"
 	"testing"
 )
 
 func TestShortHandlerPost(t *testing.T) {
-	shortener := NewURLShortener()
-
-	req := httptest.NewRequest("POST", "/shorten", nil)
-
-	rec := httptest.NewRecorder()
-
-	if req.Method != http.MethodPost {
-		http.NotFound(rec, req)
-		return
+	tests := []struct {
+		name    string
+		url     string
+		wantErr bool
+	}{
+		{"валидный HTTP URL", "http://example.com", false},
+		{"валидный HTTPS URL", "https://google.com/search?q=test", false},
+		{"невалидный URL", "not-a-url", true},
+		{"пустая строка", "", true},
 	}
 
-	shortID, err := shortener.Shorten("https://www.google.com/")
-	if err != nil {
-		http.Error(rec, err.Error(), http.StatusBadRequest)
-		return
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			shortener := NewURLShortener()
 
-	rec.WriteHeader(http.StatusCreated)
-	rec.Write([]byte(shortID))
+			shortID, err := shortener.Shorten(tt.url)
+
+			if (err != nil) != tt.wantErr {
+				t.Errorf(
+					"ошибка = %v, ожидали ошибку = %v",
+					err,
+					tt.wantErr,
+				)
+
+				return
+			}
+
+			if tt.wantErr {
+				return
+			}
+
+			if shortID == "" {
+				t.Error("shortID не должен быть пустым")
+			}
+
+			if len(shortID) < 6 || len(shortID) > 8 {
+				t.Errorf(
+					"длина shortID = %d, ожидали от 6 до 8",
+					len(shortID),
+				)
+			}
+		})
+	}
 }
 
 func TestShortHandlerGet(t *testing.T) {
