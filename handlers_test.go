@@ -1,50 +1,76 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 )
 
 func TestShortHandlerPost(t *testing.T) {
 	tests := []struct {
-		name    string
-		url     string
-		wantErr bool
+		name       string
+		body       string
+		wantStatus int
 	}{
-		{"валидный HTTP URL", "http://example.com", false},
-		{"валидный HTTPS URL", "https://google.com/search?q=test", false},
-		{"невалидный URL", "not-a-url", true},
-		{"пустая строка", "", true},
+		{
+			name:       "валидный HTTP URL",
+			body:       `{"url":"http://example.com"}`,
+			wantStatus: http.StatusCreated,
+		},
+		{
+			name:       "валидный HTTPS URL",
+			body:       `{"url":"https://google.com/search?q=test"}`,
+			wantStatus: http.StatusCreated,
+		},
+		{
+			name:       "невалидный URL",
+			body:       `{"url":"not-a-url"}`,
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "пустая строка",
+			body:       `{"url":""}`,
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "некорректный JSON",
+			body:       `{"url":`,
+			wantStatus: http.StatusBadRequest,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			shortener := NewURLShortener()
+			handler := setupHandlers(shortener)
 
-			shortID, err := shortener.Shorten(tt.url)
+			req := httptest.NewRequest(
+				http.MethodPost,
+				"/shorten",
+				bytes.NewBufferString(tt.body),
+			)
+			req.Header.Set("Content-Type", "application/json")
 
-			if (err != nil) != tt.wantErr {
-				t.Errorf(
-					"ошибка = %v, ожидали ошибку = %v",
-					err,
-					tt.wantErr,
-				)
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req)
 
+			if rec.Code != tt.wantStatus {
+				t.Fatalf("статус = %d, ожидали %d", rec.Code, tt.wantStatus)
+			}
+
+			if tt.wantStatus != http.StatusCreated {
 				return
 			}
 
-			if tt.wantErr {
-				return
+			var response shortenResponse
+			if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
+				t.Fatalf("ошибка чтения ответа: %v", err)
 			}
 
-			if shortID == "" {
-				t.Error("shortID не должен быть пустым")
-			}
-
-			if len(shortID) < 6 || len(shortID) > 8 {
-				t.Errorf(
-					"длина shortID = %d, ожидали от 6 до 8",
-					len(shortID),
-				)
+			if response.ShortURL == "" {
+				t.Error("short_url не должен быть пустым")
 			}
 		})
 	}
@@ -52,7 +78,7 @@ func TestShortHandlerPost(t *testing.T) {
 
 func TestShortHandlerGet(t *testing.T) {
 	shortener := NewURLShortener()
-
+	handler := setupHandlers(shortener)
 	originalURL := "https://www.google.com/"
 
 	shortID, err := shortener.Shorten(originalURL)
@@ -60,16 +86,28 @@ func TestShortHandlerGet(t *testing.T) {
 		t.Fatalf("Shorten() ошибка: %v", err)
 	}
 
-	gotURL, err := shortener.GetOriginal(shortID)
-	if err != nil {
-		t.Fatalf("GetOriginal() ошибка: %v", err)
+	req := httptest.NewRequest(http.MethodGet, "/"+shortID, nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusFound {
+		t.Fatalf("статус = %d, ожидали %d", rec.Code, http.StatusFound)
 	}
 
-	if gotURL != originalURL {
-		t.Errorf(
-			"URL = %q, ожидали %q",
-			gotURL,
-			originalURL,
-		)
+	if location := rec.Header().Get("Location"); location != originalURL {
+		t.Errorf("Location = %q, ожидали %q", location, originalURL)
+	}
+}
+
+func TestShortHandlerGetNotFound(t *testing.T) {
+	shortener := NewURLShortener()
+	handler := setupHandlers(shortener)
+
+	req := httptest.NewRequest(http.MethodGet, "/unknown1", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("статус = %d, ожидали %d", rec.Code, http.StatusNotFound)
 	}
 }

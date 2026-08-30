@@ -1,8 +1,10 @@
-package main
+package old
 
-import "testing"
+import (
+	"testing"
+)
 
-func TestURLShortener_Shorten(t *testing.T) {
+func TestShortHandlerPost(t *testing.T) {
 	tests := []struct {
 		name    string
 		url     string
@@ -21,43 +23,53 @@ func TestURLShortener_Shorten(t *testing.T) {
 			shortID, err := shortener.Shorten(tt.url)
 
 			if (err != nil) != tt.wantErr {
-				t.Fatalf("ошибка = %v, ожидали ошибку = %v", err, tt.wantErr)
+				t.Errorf(
+					"ошибка = %v, ожидали ошибку = %v",
+					err,
+					tt.wantErr,
+				)
+
+				return
 			}
 
 			if tt.wantErr {
 				return
 			}
 
+			if shortID == "" {
+				t.Error("shortID не должен быть пустым")
+			}
+
 			if len(shortID) < 6 || len(shortID) > 8 {
-				t.Errorf("длина short ID = %d, ожидали от 6 до 8", len(shortID))
+				t.Errorf(
+					"длина shortID = %d, ожидали от 6 до 8",
+					len(shortID),
+				)
 			}
 		})
 	}
 }
 
-func TestURLShortener_GetOriginal(t *testing.T) {
+func TestShortHandlerGet(t *testing.T) {
 	shortener := NewURLShortener()
-	originalURL := "https://example.com/very/long/path"
+
+	originalURL := "https://www.google.com/"
 
 	shortID, err := shortener.Shorten(originalURL)
 	if err != nil {
-		t.Fatalf("Shorten() вернул ошибку: %v", err)
+		t.Fatalf("Shorten() ошибка: %v", err)
 	}
 
 	gotURL, err := shortener.GetOriginal(shortID)
 	if err != nil {
-		t.Fatalf("GetOriginal() вернул ошибку: %v", err)
+		t.Fatalf("GetOriginal() ошибка: %v", err)
 	}
 
 	if gotURL != originalURL {
-		t.Errorf("полученный URL = %q, ожидали %q", gotURL, originalURL)
-	}
-}
-
-func TestURLShortener_GetOriginalNotFound(t *testing.T) {
-	shortener := NewURLShortener()
-
-	if _, err := shortener.GetOriginal("unknown1"); err == nil {
-		t.Error("ожидали ошибку для неизвестного short ID")
+		t.Errorf(
+			"URL = %q, ожидали %q",
+			gotURL,
+			originalURL,
+		)
 	}
 }

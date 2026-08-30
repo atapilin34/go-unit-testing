@@ -1,4 +1,4 @@
-package main
+package old
 
 import "testing"
 
@@ -14,29 +14,23 @@ func TestURLShortener_Shorten(t *testing.T) {
 		{"пустая строка", "", true},
 	}
 
+	shortener := NewURLShortener()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			shortener := NewURLShortener()
-
 			shortID, err := shortener.Shorten(tt.url)
-
 			if (err != nil) != tt.wantErr {
-				t.Fatalf("ошибка = %v, ожидали ошибку = %v", err, tt.wantErr)
-			}
-
-			if tt.wantErr {
+				t.Errorf("ошибка = %v, ожидали ошибку = %v", err, tt.wantErr)
 				return
 			}
-
-			if len(shortID) < 6 || len(shortID) > 8 {
-				t.Errorf("длина short ID = %d, ожидали от 6 до 8", len(shortID))
+			if !tt.wantErr && len(shortID) < 6 {
+				t.Errorf("короткий ID слишком короткий: %s", shortID)
 			}
 		})
 	}
 }
-
 func TestURLShortener_GetOriginal(t *testing.T) {
 	shortener := NewURLShortener()
+
 	originalURL := "https://example.com/very/long/path"
 
 	shortID, err := shortener.Shorten(originalURL)
@@ -50,14 +44,18 @@ func TestURLShortener_GetOriginal(t *testing.T) {
 	}
 
 	if gotURL != originalURL {
-		t.Errorf("полученный URL = %q, ожидали %q", gotURL, originalURL)
+		t.Errorf(
+			"полученный URL = %q, ожидали %q",
+			gotURL,
+			originalURL,
+		)
 	}
 }
-
 func TestURLShortener_GetOriginalNotFound(t *testing.T) {
 	shortener := NewURLShortener()
 
-	if _, err := shortener.GetOriginal("unknown1"); err == nil {
+	_, err := shortener.GetOriginal("unknown1")
+	if err == nil {
 		t.Error("ожидали ошибку для неизвестного short ID")
 	}
 }

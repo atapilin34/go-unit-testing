@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"init/example/old"
 	"log"
 	"net/http"
 )
@@ -16,23 +17,15 @@ type shortenResponse struct {
 }
 
 func main() {
-	shortener := NewURLShortener()
-	mux := setupHandlers(shortener)
+	shortener := old.NewURLShortener()
 
-	log.Println("server started on http://localhost:8080")
-
-	if err := http.ListenAndServe(":8080", mux); err != nil {
-		log.Fatal(err)
-	}
-}
-
-func setupHandlers(shortener *URLShortener) *http.ServeMux {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("POST /shorten", func(w http.ResponseWriter, r *http.Request) {
 		var request shortenRequest
 
-		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		err := json.NewDecoder(r.Body).Decode(&request)
+		if err != nil {
 			http.Error(w, "invalid JSON", http.StatusBadRequest)
 			return
 		}
@@ -50,7 +43,10 @@ func setupHandlers(shortener *URLShortener) *http.ServeMux {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
-		_ = json.NewEncoder(w).Encode(response)
+
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			log.Printf("encode response: %v", err)
+		}
 	})
 
 	mux.HandleFunc("GET /{shortID}", func(w http.ResponseWriter, r *http.Request) {
@@ -65,5 +61,9 @@ func setupHandlers(shortener *URLShortener) *http.ServeMux {
 		http.Redirect(w, r, originalURL, http.StatusFound)
 	})
 
-	return mux
+	log.Println("server started on http://localhost:8080")
+
+	if err := http.ListenAndServe(":8080", mux); err != nil {
+		log.Fatal(err)
+	}
 }
